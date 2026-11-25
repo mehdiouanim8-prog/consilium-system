@@ -2,7 +2,7 @@ import http from 'node:http';
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import app from './app.js';
+import app, { retryFailedNotifications } from './app.js';
 import { createPool, wrapPool, runMigrations } from './db.js';
 
 const PUBLIC_DIR = path.dirname(fileURLToPath(import.meta.url));
@@ -135,6 +135,8 @@ async function main() {
 
   if (!env.ADMIN_PASSWORD) console.warn('WARNING: ADMIN_PASSWORD is not set; administrator sign-in is disabled.');
   if (!env.RESEND_API_KEY || !env.RESEND_FROM_EMAIL) console.warn('WARNING: RESEND_API_KEY / RESEND_FROM_EMAIL not set; emails will be recorded as FAILED.');
+  const emailsEnabled = Boolean(env.RESEND_API_KEY && env.RESEND_FROM_EMAIL);
+  console.log(`Applicant confirmation emails: ${emailsEnabled ? 'ENABLED (Resend)' : 'DISABLED (set RESEND_API_KEY and RESEND_FROM_EMAIL)'}`);
   if (!env.RESEND_WEBHOOK_SECRET) console.warn('WARNING: RESEND_WEBHOOK_SECRET is not set; delivery webhooks will be rejected.');
 
   const server = http.createServer(async (req, res) => {
@@ -173,12 +175,30 @@ async function main() {
   const timer = setInterval(cleanup, 60 * 60 * 1000);
   timer.unref();
 
+  // Automatic retry of failed emails (every 2 minutes, up to 5 attempts per notification).
+  let retrying = false;
+  const retryEmails = async () => {
+    if (retrying) return;
+    retrying = true;
+    try {
+      const count = await retryFailedNotifications(env);
+      if (count) console.log(`Email retry job: retried ${count} notification(s).`);
+    } catch (error) {
+      console.error('Email retry job failed:', error && error.code ? error.code : error && error.name);
+    } finally {
+      retrying = false;
+    }
+  };
+  const retryTimer = setInterval(retryEmails, 2 * 60 * 1000);
+  retryTimer.unref();
+
   let shuttingDown = false;
   const shutdown = (signal) => {
     if (shuttingDown) return;
     shuttingDown = true;
     console.log(`${signal} received, shutting down.`);
     clearInterval(timer);
+    clearInterval(retryTimer);
     server.close(async () => {
       await pool.end().catch(() => {});
       process.exit(0);

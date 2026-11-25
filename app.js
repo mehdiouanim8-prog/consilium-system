@@ -124,7 +124,10 @@ async function handleApi(request, env, ctx, url) {
   }
 
   if (path.startsWith('/api/admin/')) {
-    assertAllowedOrigin(request, env, true);
+    // Browsers do not send an Origin header on same-origin GET requests, so it is only
+    // mandatory for state-changing methods (CSRF protection). If an Origin is present
+    // it must always be the site itself or an allowed origin.
+    assertAllowedOrigin(request, env, method !== 'GET' && method !== 'HEAD');
     const session = await requireAdmin(request, env);
     await touchSession(env, session.session_hash);
     return handleAdminRoutes(request, env, url, path, method, session);
@@ -896,6 +899,39 @@ async function sendApplicationNotification(env, application, eventType) {
   }
 }
 
+// Re-sends notifications that FAILED (used by the background job in index.js).
+// Never throws for a single bad row; a failure here can never affect stored applications.
+const RETRY_MAX_ATTEMPTS = 5;
+const RETRY_MIN_AGE_MS = 2 * 60 * 1000;
+const RETRY_BATCH_SIZE = 20;
+
+export async function retryFailedNotifications(env) {
+  if (!env.RESEND_API_KEY || !env.RESEND_FROM_EMAIL) return 0;
+  const cutoff = new Date(Date.now() - RETRY_MIN_AGE_MS).toISOString();
+  const pending = await env.DB.prepare(
+    `SELECT application_id, event_type FROM email_notifications
+     WHERE status = 'FAILED' AND attempt_count < ? AND updated_at < ?
+     ORDER BY updated_at ASC LIMIT ?`
+  ).bind(RETRY_MAX_ATTEMPTS, cutoff, RETRY_BATCH_SIZE).all();
+  const rows = pending.results || [];
+  const touched = new Set();
+  let retried = 0;
+  for (const row of rows) {
+    try {
+      const application = await getApplicationById(env, row.application_id);
+      await sendApplicationNotification(env, application, row.event_type);
+      touched.add(row.application_id);
+      retried += 1;
+    } catch (error) {
+      console.error('Email retry skipped:', safeErrorName(error));
+    }
+  }
+  for (const id of touched) {
+    try { await updateEmailSummary(env, id); } catch (_error) { /* best effort */ }
+  }
+  return retried;
+}
+
 function notificationContent(application, eventType) {
   const name = application.full_name;
   const reference = application.reference;
@@ -934,8 +970,8 @@ function notificationContent(application, eventType) {
     return {
       to: application.email,
       subject: 'Your Consilium Application — Received',
-      html: `<p>Hello ${escapeHtml(name)},</p><p>Thank you for applying to Consilium.</p><p>We have successfully received your application. Your information is currently under review, and our team will get back to you shortly.</p><p>Your requested appointment time is not confirmed until you receive a separate confirmation from Consilium.</p><p>Your application reference is <strong>${escapeHtml(reference)}</strong>.</p><p>We appreciate your interest.</p><p>Consilium<br>Strategy · Intelligence · Execution</p>`,
-      text: `Hello ${name},\n\nThank you for applying to Consilium.\n\nWe have successfully received your application. Your information is currently under review, and our team will get back to you shortly.\n\nYour requested appointment time is not confirmed until you receive a separate confirmation from Consilium.\n\nApplication reference: ${reference}\n\nWe appreciate your interest.\n\nConsilium\nStrategy · Intelligence · Execution`
+      html: `<p>Hello ${escapeHtml(name)},</p><p>Thank you for applying to Consilium.</p><p>We have successfully received your application. Your information is currently under review, and our team will get back to you shortly.</p><p>Your requested appointment: <strong>${escapeHtml(appointment)}</strong>.</p><p>Your requested appointment time is not confirmed until you receive a separate confirmation from Consilium.</p><p>Your application reference is <strong>${escapeHtml(reference)}</strong>.</p><p>We appreciate your interest.</p><p>Consilium<br>Strategy · Intelligence · Execution</p>`,
+      text: `Hello ${name},\n\nThank you for applying to Consilium.\n\nWe have successfully received your application. Your information is currently under review, and our team will get back to you shortly.\n\nYour requested appointment: ${appointment}.\n\nYour requested appointment time is not confirmed until you receive a separate confirmation from Consilium.\n\nApplication reference: ${reference}\n\nWe appreciate your interest.\n\nConsilium\nStrategy · Intelligence · Execution`
     };
   }
   if (eventType === 'ACCEPTED_APPLICANT') {

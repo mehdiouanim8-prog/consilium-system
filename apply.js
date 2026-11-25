@@ -14,6 +14,7 @@
   const dateInput = document.getElementById('appointment-date');
   const timeInput = document.getElementById('appointment-time');
   const honeypot = document.getElementById('website-honeypot');
+  const introElement = document.querySelector('.intro');
 
   let isSubmitting = false;
   let submitted = false;
@@ -141,9 +142,10 @@
         window.ConsiliumCalendar.refreshAvailability(payload.appointment_date).catch(() => {});
       }
       form.style.display = 'none';
+      if (introElement) introElement.style.display = 'none';
       referenceElement.textContent = `Application reference: ${result.reference}`;
       successElement.style.display = 'block';
-      successElement.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      window.scrollTo({ top: 0, behavior: 'smooth' });
     } catch (error) {
       showError(error instanceof Error ? error.message : 'Your application could not be submitted. Please try again.');
       setSubmitting(false);

@@ -9,8 +9,11 @@
     total: 0,
     currentId: null,
     currentApplication: null,
-    rows: []
+    rows: [],
+    query: '',
+    refreshing: false
   };
+  const AUTO_REFRESH_MS = 30000;
 
   const loginView = byId('login-view');
   const dashboardView = byId('dashboard-view');
@@ -80,6 +83,47 @@
     }).format(date) + ' (Casablanca)';
   }
 
+  function formatShort(value) {
+    if (!value) return '—';
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) return String(value);
+    return new Intl.DateTimeFormat('en', {
+      dateStyle: 'medium', timeStyle: 'short', timeZone: 'Africa/Casablanca'
+    }).format(date);
+  }
+
+  function emailBadge(status) {
+    const value = String(status || 'PENDING').toUpperCase();
+    const badge = document.createElement('span');
+    badge.className = 'email-badge';
+    if (['FAILED', 'BOUNCED', 'COMPLAINED', 'SUPPRESSED'].includes(value)) {
+      badge.classList.add('failed');
+      badge.textContent = 'Email failed';
+    } else if (value === 'DELIVERED') {
+      badge.textContent = 'Email delivered';
+    } else if (value === 'SENT') {
+      badge.textContent = 'Email sent';
+    } else if (value === 'DELIVERY_DELAYED') {
+      badge.textContent = 'Email delayed';
+    } else {
+      badge.textContent = 'Email pending';
+    }
+    return badge;
+  }
+
+  function markUpdated() {
+    const time = new Intl.DateTimeFormat('en-GB', {
+      hour: '2-digit', minute: '2-digit', second: '2-digit', hourCycle: 'h23', timeZone: 'Africa/Casablanca'
+    }).format(new Date());
+    byId('last-updated').textContent = `Last updated ${time}`;
+  }
+
+  function notesDirty() {
+    const notes = byId('admin-notes');
+    const saved = state.currentApplication ? (state.currentApplication.admin_notes || '') : '';
+    return Boolean(state.currentApplication) && notes.value !== saved;
+  }
+
   function formatAppointment(date, start, end, timezone) {
     if (!date || !start) return 'Not requested';
     return `${date} · ${start}${end ? `–${end}` : ''} · ${timezone || 'Africa/Casablanca'}`;
@@ -120,15 +164,21 @@
       button.type = 'button';
       button.className = 'application-item';
       button.setAttribute('aria-current', application.id === state.currentId ? 'true' : 'false');
+      const top = document.createElement('div');
+      top.className = 'item-top';
       const ref = document.createElement('span');
       ref.className = 'ref';
       ref.textContent = application.reference;
+      top.append(ref, emailBadge(application.applicant_email_status));
       const name = document.createElement('strong');
       name.textContent = application.full_name;
       const status = document.createElement('span');
       status.className = 'meta';
       status.textContent = `${statusLabel(application.status)} · ${application.appointment_date} ${application.appointment_start} · ${application.email}`;
-      button.append(ref, name, status);
+      const submitted = document.createElement('span');
+      submitted.className = 'meta';
+      submitted.textContent = `Submitted ${formatShort(application.created_at)}`;
+      button.append(top, name, status, submitted);
       button.addEventListener('click', () => loadDetail(application.id));
       listElement.appendChild(button);
     }
@@ -137,13 +187,13 @@
     byId('next-page').disabled = state.offset + state.limit >= state.total;
   }
 
-  async function loadApplications() {
-    setMessage(listMessage, 'Loading applications…');
+  async function loadApplications(silent) {
+    if (!silent) setMessage(listMessage, 'Loading applications…');
     const params = new URLSearchParams({
       limit: String(state.limit),
       offset: String(state.offset),
       status: statusFilter.value,
-      q: searchInput.value.trim()
+      q: state.query
     });
     try {
       const data = await api(`/api/admin/applications?${params.toString()}`);
@@ -152,6 +202,7 @@
       renderCounts(data.counts || {});
       renderList();
       setMessage(listMessage, '');
+      markUpdated();
       if (state.currentId && !state.rows.some((row) => row.id === state.currentId)) {
         state.currentId = null;
         state.currentApplication = null;
@@ -159,8 +210,11 @@
         detailEmpty.hidden = false;
       }
     } catch (error) {
-      state.rows = [];
-      renderList();
+      // Background refreshes keep the current list on screen if a request fails.
+      if (!silent) {
+        state.rows = [];
+        renderList();
+      }
       setMessage(listMessage, error.message);
     }
   }
@@ -242,13 +296,33 @@
     renderList();
   }
 
-  async function loadDetail(id) {
-    setMessage(detailMessage, 'Loading application…');
+  async function loadDetail(id, silent) {
+    if (!silent) setMessage(detailMessage, 'Loading application…');
     try {
       const data = await api(`/api/admin/applications/${encodeURIComponent(id)}`);
       renderDetail(data.application);
     } catch (error) {
       setMessage(detailMessage, error.message);
+    }
+  }
+
+  // Reloads the list and (when safe) the open application. `auto` = timer/visibility refresh.
+  async function refreshAll(auto) {
+    if (state.refreshing || dashboardView.hidden) return;
+    state.refreshing = true;
+    try {
+      await loadApplications(true);
+      if (state.currentId) {
+        const notes = byId('admin-notes');
+        const editing = document.activeElement === notes || notesDirty();
+        if (!editing) {
+          await loadDetail(state.currentId, true);
+        } else if (!auto) {
+          toast('Unsaved notes kept. Save them to refresh this application.');
+        }
+      }
+    } finally {
+      state.refreshing = false;
     }
   }
 
@@ -343,11 +417,17 @@
     showLogin('You have been logged out.');
   });
 
-  byId('search-button').addEventListener('click', () => { state.offset = 0; loadApplications(); });
+  function runSearch() {
+    state.query = searchInput.value.trim();
+    state.offset = 0;
+    loadApplications();
+  }
+  byId('search-button').addEventListener('click', runSearch);
   searchInput.addEventListener('keydown', (event) => {
-    if (event.key === 'Enter') { event.preventDefault(); state.offset = 0; loadApplications(); }
+    if (event.key === 'Enter') { event.preventDefault(); runSearch(); }
   });
   statusFilter.addEventListener('change', () => { state.offset = 0; loadApplications(); });
+  byId('refresh-button').addEventListener('click', () => refreshAll(false));
   byId('previous-page').addEventListener('click', () => {
     state.offset = Math.max(0, state.offset - state.limit);
     loadApplications();
@@ -360,6 +440,13 @@
   byId('decline-button').addEventListener('click', () => changeStatus('decline'));
   byId('save-notes-button').addEventListener('click', saveNotes);
   byId('retry-email-button').addEventListener('click', retryEmails);
+
+  window.setInterval(() => {
+    if (document.visibilityState === 'visible') refreshAll(true);
+  }, AUTO_REFRESH_MS);
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'visible') refreshAll(true);
+  });
 
   (async function initialise() {
     try {

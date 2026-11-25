@@ -7,7 +7,10 @@ import { createPool, wrapPool, runMigrations } from './db.js';
 
 const PUBLIC_DIR = path.dirname(fileURLToPath(import.meta.url));
 // Flat layout: only these files are ever served to browsers.
-const PUBLIC_FILES = new Set(['index.html', 'ADMINDASHBOARDCONSILIUM.html', 'admin.js', 'admin.css']);
+const PUBLIC_FILES = new Set([
+  'index.html', 'apply.html', 'apply.js', 'calendar.js', 'calendar.css',
+  'ADMINDASHBOARDCONSILIUM.html', 'admin.js', 'admin.css'
+]);
 const MAX_BODY_BYTES = 64 * 1024;
 
 const CONTENT_TYPES = {

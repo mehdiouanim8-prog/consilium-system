@@ -8,7 +8,7 @@ import { createPool, wrapPool, runMigrations } from './db.js';
 const PUBLIC_DIR = path.dirname(fileURLToPath(import.meta.url));
 // Flat layout: only these files are ever served to browsers.
 const PUBLIC_FILES = new Set([
-  'index.html', 'apply.html', 'apply.js', 'calendar.js', 'calendar.css',
+  'apply.html', 'apply.js', 'calendar.js', 'calendar.css',
   'ADMINDASHBOARDCONSILIUM.html', 'admin.js', 'admin.css'
 ]);
 const MAX_BODY_BYTES = 64 * 1024;
@@ -37,7 +37,8 @@ const ASSETS = {
     let pathname;
     try { pathname = decodeURIComponent(url.pathname); } catch (_error) { return new Response('Not found', { status: 404 }); }
     if (pathname.includes('\0')) return new Response('Not found', { status: 404 });
-    if (pathname.endsWith('/')) pathname += 'index.html';
+    // The public website opens first: '/' serves the application page.
+    if (pathname.endsWith('/')) pathname += 'apply.html';
 
     const name = pathname.replace(/^\/+/, '');
     if (!PUBLIC_FILES.has(name)) {

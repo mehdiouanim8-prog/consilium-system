@@ -1,0 +1,13 @@
+{
+  "name": "consilium-system",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Consilium application management and appointment scheduling system (Node.js + PostgreSQL on Railway).",
+  "engines": { "node": ">=20" },
+  "scripts": {
+    "start": "node index.js",
+    "migrate": "node migrate.js"
+  },
+  "dependencies": { "pg": "^8.13.0" }
+}

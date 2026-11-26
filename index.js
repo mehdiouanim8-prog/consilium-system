@@ -2,7 +2,7 @@ import http from 'node:http';
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import app, { retryFailedNotifications, emailProvider } from './app.js';
+import app from './app.js';
 import { createPool, wrapPool, runMigrations } from './db.js';
 
 const PUBLIC_DIR = path.dirname(fileURLToPath(import.meta.url));
@@ -72,12 +72,13 @@ function buildEnv(db) {
     ASSETS,
     ALLOWED_ORIGINS: process.env.ALLOWED_ORIGINS,
     ADMIN_PASSWORD: process.env.ADMIN_PASSWORD,
-    BREVO_API_KEY: process.env.BREVO_API_KEY,
-    BREVO_FROM_EMAIL: process.env.BREVO_FROM_EMAIL,
-    BREVO_FROM_NAME: process.env.BREVO_FROM_NAME,
     RESEND_API_KEY: process.env.RESEND_API_KEY,
     RESEND_FROM_EMAIL: process.env.RESEND_FROM_EMAIL,
-    RESEND_WEBHOOK_SECRET: process.env.RESEND_WEBHOOK_SECRET
+    RESEND_WEBHOOK_SECRET: process.env.RESEND_WEBHOOK_SECRET,
+    GOOGLE_CLIENT_ID: process.env.GOOGLE_CLIENT_ID,
+    GOOGLE_CLIENT_SECRET: process.env.GOOGLE_CLIENT_SECRET,
+    GOOGLE_REFRESH_TOKEN: process.env.GOOGLE_REFRESH_TOKEN,
+    GOOGLE_CALENDAR_ID: process.env.GOOGLE_CALENDAR_ID
   };
 }
 
@@ -137,10 +138,9 @@ async function main() {
   const env = buildEnv(wrapPool(pool));
 
   if (!env.ADMIN_PASSWORD) console.warn('WARNING: ADMIN_PASSWORD is not set; administrator sign-in is disabled.');
-  const provider = emailProvider(env);
-  if (!provider) console.warn('WARNING: no email provider configured (set BREVO_API_KEY and BREVO_FROM_EMAIL); emails will be recorded as FAILED.');
-  console.log(`Applicant confirmation emails: ${provider ? `ENABLED (${provider === 'brevo' ? 'Brevo' : 'Resend'})` : 'DISABLED (set BREVO_API_KEY and BREVO_FROM_EMAIL)'}`);
-  if (provider === 'resend' && !env.RESEND_WEBHOOK_SECRET) console.warn('WARNING: RESEND_WEBHOOK_SECRET is not set; delivery webhooks will be rejected.');
+  if (!env.RESEND_API_KEY || !env.RESEND_FROM_EMAIL) console.warn('WARNING: RESEND_API_KEY / RESEND_FROM_EMAIL not set; emails will be recorded as FAILED.');
+  if (!env.GOOGLE_CLIENT_ID || !env.GOOGLE_CLIENT_SECRET || !env.GOOGLE_REFRESH_TOKEN) console.warn('WARNING: GOOGLE_CLIENT_ID / GOOGLE_CLIENT_SECRET / GOOGLE_REFRESH_TOKEN not set; accepting an application will fail until Google Meet is configured.');
+  if (!env.RESEND_WEBHOOK_SECRET) console.warn('WARNING: RESEND_WEBHOOK_SECRET is not set; delivery webhooks will be rejected.');
 
   const server = http.createServer(async (req, res) => {
     try {
@@ -178,30 +178,12 @@ async function main() {
   const timer = setInterval(cleanup, 60 * 60 * 1000);
   timer.unref();
 
-  // Automatic retry of failed emails (every 2 minutes, up to 5 attempts per notification).
-  let retrying = false;
-  const retryEmails = async () => {
-    if (retrying) return;
-    retrying = true;
-    try {
-      const count = await retryFailedNotifications(env);
-      if (count) console.log(`Email retry job: retried ${count} notification(s).`);
-    } catch (error) {
-      console.error('Email retry job failed:', error && error.code ? error.code : error && error.name);
-    } finally {
-      retrying = false;
-    }
-  };
-  const retryTimer = setInterval(retryEmails, 2 * 60 * 1000);
-  retryTimer.unref();
-
   let shuttingDown = false;
   const shutdown = (signal) => {
     if (shuttingDown) return;
     shuttingDown = true;
     console.log(`${signal} received, shutting down.`);
     clearInterval(timer);
-    clearInterval(retryTimer);
     server.close(async () => {
       await pool.end().catch(() => {});
       process.exit(0);

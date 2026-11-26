@@ -823,6 +823,71 @@ async function writeAudit(env, action, applicationId, details, actorHash) {
   ).bind(crypto.randomUUID(), action, applicationId, ipHash.slice(0, 12), JSON.stringify(details || {}), new Date().toISOString()).run();
 }
 
+// Email delivery. Brevo (works with one verified sender address, no domain needed) or Resend
+// (needs a verified domain). Both use HTTPS APIs, which Railway allows on every plan.
+export function emailProvider(env) {
+  if (env.BREVO_API_KEY && env.BREVO_FROM_EMAIL) return 'brevo';
+  if (env.RESEND_API_KEY && env.RESEND_FROM_EMAIL) return 'resend';
+  return '';
+}
+
+function parseSender(value, fallbackName) {
+  const text = String(value || '').trim();
+  const match = text.match(/^(.*)<([^<>]+)>$/);
+  if (match) {
+    return { name: match[1].trim().replace(/^"|"$/g, '') || fallbackName || 'Consilium', email: match[2].trim() };
+  }
+  return { name: fallbackName || 'Consilium', email: text };
+}
+
+// Sends one email and returns the provider's message id. Throws on any failure.
+async function deliverEmail(env, message, reference, eventType) {
+  const provider = emailProvider(env);
+  let response;
+  if (provider === 'brevo') {
+    response = await fetch('https://api.brevo.com/v3/smtp/email', {
+      method: 'POST',
+      headers: { 'api-key': env.BREVO_API_KEY, 'Content-Type': 'application/json', Accept: 'application/json' },
+      body: JSON.stringify({
+        sender: parseSender(env.BREVO_FROM_EMAIL, env.BREVO_FROM_NAME),
+        to: [{ email: message.to }],
+        subject: message.subject,
+        htmlContent: message.html,
+        textContent: message.text
+      }),
+      signal: AbortSignal.timeout(12000)
+    });
+  } else if (provider === 'resend') {
+    response = await fetch('https://api.resend.com/emails', {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${env.RESEND_API_KEY}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        from: env.RESEND_FROM_EMAIL,
+        to: [message.to],
+        subject: message.subject,
+        html: message.html,
+        text: message.text,
+        tags: [
+          { name: 'application_reference', value: reference },
+          { name: 'notification_type', value: eventType.toLowerCase() }
+        ]
+      }),
+      signal: AbortSignal.timeout(12000)
+    });
+  } else {
+    throw new Error('Email delivery is not configured.');
+  }
+  const responseText = await response.text();
+  let result = {};
+  try { result = responseText ? JSON.parse(responseText) : {}; } catch (_error) { result = {}; }
+  const messageId = provider === 'brevo' ? result.messageId : result.id;
+  if (!response.ok || !messageId) {
+    const detail = result && result.message ? result.message : `${provider === 'brevo' ? 'Brevo' : 'Resend'} returned HTTP ${response.status}.`;
+    throw new Error(String(detail).slice(0, 800));
+  }
+  return String(messageId);
+}
+
 async function sendApplicationNotification(env, application, eventType) {
   const config = notificationContent(application, eventType);
   if (!config) return 'FAILED';
@@ -837,50 +902,25 @@ async function sendApplicationNotification(env, application, eventType) {
                    last_error = '', updated_at = excluded.updated_at`
   ).bind(notificationId, application.id, eventType, config.to, now, now).run();
 
-  if (!env.RESEND_API_KEY || !env.RESEND_FROM_EMAIL) {
-    const message = 'Email delivery is not configured. Set the RESEND_API_KEY and RESEND_FROM_EMAIL environment variables.';
+  if (!emailProvider(env)) {
+    const message = 'Email delivery is not configured. Set BREVO_API_KEY and BREVO_FROM_EMAIL (or RESEND_API_KEY and RESEND_FROM_EMAIL).';
     await markNotificationFailed(env, application.id, eventType, message);
     await updateEmailSummary(env, application.id);
     return 'FAILED';
   }
 
   try {
-    const response = await fetch('https://api.resend.com/emails', {
-      method: 'POST',
-      headers: {
-        Authorization: `Bearer ${env.RESEND_API_KEY}`,
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify({
-        from: env.RESEND_FROM_EMAIL,
-        to: [config.to],
-        subject: config.subject,
-        html: config.html,
-        text: config.text,
-        tags: [
-          { name: 'application_reference', value: application.reference },
-          { name: 'notification_type', value: eventType.toLowerCase() }
-        ]
-      }),
-      signal: AbortSignal.timeout(12000)
-    });
-    const responseText = await response.text();
-    let result = {};
-    try { result = responseText ? JSON.parse(responseText) : {}; } catch (_error) { result = {}; }
-    if (!response.ok || !result.id) {
-      const detail = result && result.message ? result.message : `Resend returned HTTP ${response.status}.`;
-      throw new Error(String(detail).slice(0, 800));
-    }
+    const providerMessageId = await deliverEmail(env, config, application.reference, eventType);
     await env.DB.prepare(
       `UPDATE email_notifications
        SET status = 'SENT', provider_message_id = ?, last_error = '', updated_at = ?
        WHERE application_id = ? AND event_type = ?`
-    ).bind(result.id, new Date().toISOString(), application.id, eventType).run();
+    ).bind(providerMessageId, new Date().toISOString(), application.id, eventType).run();
 
     // A webhook may arrive very quickly, before the send response was saved.
     const latestEvent = await env.DB.prepare(
       `SELECT event_type FROM resend_webhook_events WHERE email_id = ? ORDER BY received_at DESC LIMIT 1`
-    ).bind(result.id).first();
+    ).bind(providerMessageId).first();
     if (latestEvent) {
       const status = mapResendEventStatus(latestEvent.event_type);
       if (status) {
@@ -906,7 +946,7 @@ const RETRY_MIN_AGE_MS = 2 * 60 * 1000;
 const RETRY_BATCH_SIZE = 20;
 
 export async function retryFailedNotifications(env) {
-  if (!env.RESEND_API_KEY || !env.RESEND_FROM_EMAIL) return 0;
+  if (!emailProvider(env)) return 0;
   const cutoff = new Date(Date.now() - RETRY_MIN_AGE_MS).toISOString();
   const pending = await env.DB.prepare(
     `SELECT application_id, event_type FROM email_notifications

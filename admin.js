@@ -220,7 +220,6 @@
     addField(byId('appointment-fields'), 'Applicant timezone', application.applicant_timezone);
     addField(byId('appointment-fields'), 'Appointment status', application.status);
     addField(byId('appointment-fields'), 'Application reference', application.reference);
-    if (application.meet_link) addField(byId('appointment-fields'), 'Google Meet link', application.meet_link);
 
     const answers = application.answers && typeof application.answers === 'object' ? application.answers : {};
     const known = new Set(['name', 'email', 'phone', 'country', 'city', 'reference_url', 'applicant_type', 'industry_market', 'objectives', 'working_toward', 'additional_context', 'appointment_date', 'appointment_time', 'applicant_timezone', 'ability_to_accept_change', 'submission_nonce', 'website']);

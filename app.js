@@ -821,7 +821,7 @@ async function writeAudit(env, action, applicationId, details, actorHash) {
 }
 
 async function sendApplicationNotification(env, application, eventType) {
-  let config = notificationContent(application, eventType);
+  const config = notificationContent(application, eventType);
   if (!config) return 'FAILED';
   const now = new Date().toISOString();
   const notificationId = crypto.randomUUID();
@@ -842,12 +842,6 @@ async function sendApplicationNotification(env, application, eventType) {
   }
 
   try {
-    // Accepted appointments must carry a valid Google Meet link; if it cannot be created
-    // the email is NOT sent and the failure is shown in the dashboard (Retry email re-tries).
-    if (eventType === 'ACCEPTED_APPLICANT' && !application.meet_link) {
-      application = Object.assign({}, application, await ensureMeetLink(env, application));
-      config = notificationContent(application, eventType);
-    }
     const response = await fetch('https://api.resend.com/emails', {
       method: 'POST',
       headers: {
@@ -945,16 +939,11 @@ function notificationContent(application, eventType) {
     };
   }
   if (eventType === 'ACCEPTED_APPLICANT') {
-    const link = application.meet_link || '';
-    const meetHtml = link
-      ? `<p>Join the meeting on Google Meet:<br><a href="${escapeHtml(link)}" style="display:inline-block;margin:8px 0;padding:10px 18px;background:#1a73e8;color:#ffffff;text-decoration:none;border-radius:4px;font-family:Arial,sans-serif">Join Google Meet</a><br><span style="font-size:13px;color:#555">${escapeHtml(link)}</span></p>`
-      : '';
-    const meetText = link ? `Google Meet link: ${link}\n\n` : '';
     return {
       to: application.email,
       subject: `Your Consilium appointment request has been accepted — ${reference}`,
-      html: `<p>Hello ${escapeHtml(name)},</p><p>Consilium has accepted your application and appointment request.</p><p>Your appointment is scheduled for <strong>${escapeHtml(appointment)}</strong>.</p>${meetHtml}<p>Application reference: <strong>${escapeHtml(reference)}</strong>.</p><p>Consilium<br>Strategy · Intelligence · Execution</p>`,
-      text: `Hello ${name},\n\nConsilium has accepted your application and appointment request.\n\nYour appointment is scheduled for ${appointment}.\n\n${meetText}Application reference: ${reference}\n\nConsilium\nStrategy · Intelligence · Execution`
+      html: `<p>Hello ${escapeHtml(name)},</p><p>Consilium has accepted your application and appointment request.</p><p>Your appointment is scheduled for <strong>${escapeHtml(appointment)}</strong>.</p><p>Application reference: <strong>${escapeHtml(reference)}</strong>.</p><p>Consilium<br>Strategy · Intelligence · Execution</p>`,
+      text: `Hello ${name},\n\nConsilium has accepted your application and appointment request.\n\nYour appointment is scheduled for ${appointment}.\n\nApplication reference: ${reference}\n\nConsilium\nStrategy · Intelligence · Execution`
     };
   }
   if (eventType === 'DECLINED_APPLICANT') {
@@ -966,78 +955,6 @@ function notificationContent(application, eventType) {
     };
   }
   return null;
-}
-
-// ---------- Google Meet (Google Calendar API) ----------
-async function googleAccessToken(env) {
-  const response = await fetch('https://oauth2.googleapis.com/token', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-    body: new URLSearchParams({
-      client_id: env.GOOGLE_CLIENT_ID,
-      client_secret: env.GOOGLE_CLIENT_SECRET,
-      refresh_token: env.GOOGLE_REFRESH_TOKEN,
-      grant_type: 'refresh_token'
-    }),
-    signal: AbortSignal.timeout(10000)
-  });
-  const data = await response.json().catch(() => ({}));
-  if (!response.ok || !data.access_token) {
-    throw new Error(`Google auth failed: ${data.error_description || data.error || 'HTTP ' + response.status}`);
-  }
-  return data.access_token;
-}
-
-function meetLinkFromEvent(event) {
-  if (event && event.hangoutLink) return event.hangoutLink;
-  const entry = event && event.conferenceData && (event.conferenceData.entryPoints || []).find((e) => e.entryPointType === 'video');
-  return entry ? entry.uri : '';
-}
-
-// Creates a Calendar event with a Meet room for the appointment and stores the link.
-async function ensureMeetLink(env, application) {
-  if (!env.GOOGLE_CLIENT_ID || !env.GOOGLE_CLIENT_SECRET || !env.GOOGLE_REFRESH_TOKEN) {
-    throw new Error('Google Meet is not configured. Set GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET and GOOGLE_REFRESH_TOKEN.');
-  }
-  const token = await googleAccessToken(env);
-  const calendar = encodeURIComponent(env.GOOGLE_CALENDAR_ID || 'primary');
-  const hhmm = (v) => String(v).slice(0, 5);
-  const headers = { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' };
-
-  const create = await fetch(
-    `https://www.googleapis.com/calendar/v3/calendars/${calendar}/events?conferenceDataVersion=1&sendUpdates=none`,
-    {
-      method: 'POST',
-      headers,
-      body: JSON.stringify({
-        summary: `Consilium appointment — ${application.full_name} (${application.reference})`,
-        description: `Application reference: ${application.reference}\nApplicant: ${application.full_name} <${application.email}>`,
-        start: { dateTime: `${application.appointment_date}T${hhmm(application.appointment_start)}:00`, timeZone: TIME_ZONE },
-        end: { dateTime: `${application.appointment_date}T${hhmm(application.appointment_end)}:00`, timeZone: TIME_ZONE },
-        attendees: [{ email: application.email, displayName: application.full_name }],
-        conferenceData: {
-          createRequest: { requestId: application.id, conferenceSolutionKey: { type: 'hangoutsMeet' } }
-        }
-      }),
-      signal: AbortSignal.timeout(12000)
-    }
-  );
-  let event = await create.json().catch(() => ({}));
-  if (!create.ok) {
-    throw new Error(`Google Calendar error: ${(event.error && event.error.message) || 'HTTP ' + create.status}`);
-  }
-  // Meet room creation can be briefly pending; poll a few times.
-  for (let i = 0; i < 4 && !meetLinkFromEvent(event); i++) {
-    await new Promise((resolve) => setTimeout(resolve, 800));
-    const poll = await fetch(`https://www.googleapis.com/calendar/v3/calendars/${calendar}/events/${event.id}?conferenceDataVersion=1`, { headers, signal: AbortSignal.timeout(8000) });
-    event = await poll.json().catch(() => event);
-  }
-  const link = meetLinkFromEvent(event);
-  if (!link) throw new Error('Google created the event but returned no Meet link.');
-
-  await env.DB.prepare('UPDATE applications SET meet_link = ?, calendar_event_id = ? WHERE id = ?')
-    .bind(link, event.id, application.id).run();
-  return { meet_link: link, calendar_event_id: event.id };
 }
 
 function escapeHtml(value) {

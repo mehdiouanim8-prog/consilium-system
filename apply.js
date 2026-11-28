@@ -11,6 +11,7 @@
   const referenceElement = document.getElementById('success-reference');
   const nonceInput = document.getElementById('submission-nonce');
   const timezoneInput = document.getElementById('applicant-timezone');
+  const languageInput = document.getElementById('site-language');
   const dateInput = document.getElementById('appointment-date');
   const timeInput = document.getElementById('appointment-time');
   const honeypot = document.getElementById('website-honeypot');
@@ -27,6 +28,8 @@
     window.crypto.getRandomValues(bytes);
     return Array.from(bytes, (byte) => byte.toString(16).padStart(2, '0')).join('');
   }
+
+  function t(key, fallback) { return window.ConsiliumI18n ? window.ConsiliumI18n.t(key, fallback) : fallback; }
 
   function showError(message) {
     errorElement.textContent = message;
@@ -57,21 +60,26 @@
   function setSubmitting(value) {
     isSubmitting = value;
     submitButton.disabled = value;
-    submitButton.textContent = value ? 'Submitting…' : 'Submit application ↗';
+    submitButton.textContent = value ? t('apply.submitting', 'Submitting…') : t('apply.submit', 'Submit application ↗');
   }
 
   function serverMessage(data, status) {
-    if (data && typeof data.message === 'string' && data.message.trim()) return data.message;
-    if (status === 409) return 'That appointment time is no longer available. Please choose another time.';
-    if (status === 429) return 'Too many attempts were received. Please wait a moment and try again.';
-    return 'Your application could not be submitted. Please try again.';
+    const code = data && data.code;
+    const messages = {
+      DAILY_LIMIT_REACHED:'errors.dailyLimit', APPOINTMENT_CONFLICT:'errors.conflict', RATE_LIMITED:'errors.rate', INVALID_EMAIL:'errors.email', INVALID_REFERENCE_URL:'errors.url', INVALID_CHANGE_RATING:'errors.change', INVALID_APPOINTMENT_DATE:'errors.date', INVALID_APPOINTMENT_TIME:'errors.time', APPOINTMENT_IN_PAST:'errors.past', INVALID_SUBMISSION_KEY:'errors.nonce', MISSING_FIELD:'errors.missing', INVALID_OBJECTIVES:'errors.objectives', REQUEST_TOO_LARGE:'errors.large', INVALID_BODY:'errors.invalid', INTERNAL_ERROR:'errors.internal'
+    };
+    if (code && messages[code]) return t(messages[code], data.message || 'Your application could not be submitted. Please try again.');
+    if (status === 409) return t('errors.conflict', 'That appointment time is no longer available. Please choose another time.');
+    if (status === 429) return t('errors.rate', 'Too many attempts were received. Please wait a moment and try again.');
+    return t('errors.internal', 'Your application could not be submitted. Please try again.');
   }
 
   function populateCountries() {
     const select = document.getElementById('country');
     if (!select || select.options.length > 1 || typeof Intl.DisplayNames !== 'function') return;
     const codes = ('AD AE AF AG AI AL AM AO AQ AR AS AT AU AW AX AZ BA BB BD BE BF BG BH BI BJ BL BM BN BO BQ BR BS BT BV BW BY BZ CA CC CD CF CG CH CI CK CL CM CN CO CR CU CV CW CX CY CZ DE DJ DK DM DO DZ EC EE EG EH ER ES ET FI FJ FK FO FR GA GB GD GE GF GG GH GI GL GM GN GP GQ GR GS GT GU GW GY HK HM HN HR HT HU ID IE IL IM IN IO IQ IR IS IT JE JM JO JP KE KG KH KI KM KN KP KR KW KY KZ LA LB LC LI LK LR LS LT LU LV LY MA MC MD ME MF MG MH MK ML MM MN MO MP MQ MR MS MT MU MV MW MX MY MZ NA NC NE NF NG NI NL NO NP NR NU NZ OM PA PE PF PG PH PK PL PM PN PR PS PT PW PY QA RE RO RS RU RW SA SB SC SD SE SG SH SI SJ SK SL SM SN SO SR SS ST SV SX SY SZ TC TD TF TG TH TJ TK TL TM TN TO TR TT TV TW TZ UA UG UM US UY UZ VA VC VE VG VI VN VU WF WS YE YT ZA ZM ZW').split(' ');
-    const names = new Intl.DisplayNames(['en'], { type: 'region' });
+    const lang = window.ConsiliumI18n ? window.ConsiliumI18n.getLanguage() : 'en';
+    const names = new Intl.DisplayNames([lang === 'fr' ? 'fr-FR' : lang === 'ar' ? 'ar' : 'en'], { type: 'region' });
     const countryOptions = codes.map((code) => ({ code, name: names.of(code) }))
       .filter((item) => item.name && item.name !== item.code)
       .sort((a, b) => a.name.localeCompare(b.name));
@@ -83,10 +91,23 @@
     }
   }
 
-  populateCountries();
-  if (timezoneInput) {
-    timezoneInput.value = Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC';
+  function applyLocalizedValidation() {
+    const fields = form.querySelectorAll('input, select, textarea');
+    fields.forEach((field) => {
+      field.addEventListener('invalid', () => {
+        if (field.validity.valueMissing) field.setCustomValidity(t('validation.required', 'Please complete this required field.'));
+        else if (field.validity.typeMismatch && field.type === 'email') field.setCustomValidity(t('validation.email', 'Enter a valid email address.'));
+        else if (field.validity.typeMismatch && field.type === 'url') field.setCustomValidity(t('validation.url', 'Enter a valid URL.'));
+      });
+      field.addEventListener('input', () => field.setCustomValidity(''));
+      field.addEventListener('change', () => field.setCustomValidity(''));
+    });
   }
+
+  applyLocalizedValidation();
+  populateCountries();
+  if (timezoneInput) timezoneInput.value = Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC';
+  if (languageInput) languageInput.value = window.ConsiliumI18n ? window.ConsiliumI18n.getLanguage() : 'en';
   if (nonceInput && !nonceInput.value) nonceInput.value = createNonce();
 
   form.addEventListener('submit', async (event) => {
@@ -96,15 +117,16 @@
 
     if (!form.reportValidity()) return;
     if (!dateInput.value || !timeInput.value) {
-      showError('Please select an available appointment date and time.');
+      showError(t('errors.selectAppointment', 'Please select an available appointment date and time.'));
       document.getElementById('booking-calendar').scrollIntoView({ behavior: 'smooth', block: 'center' });
       return;
     }
     if (honeypot && honeypot.value.trim()) {
-      showError('We could not process this application. Please refresh the page and try again.');
+      showError(t('errors.honeypot', 'We could not process this application. Please refresh the page and try again.'));
       return;
     }
 
+    if (languageInput) languageInput.value = window.ConsiliumI18n ? window.ConsiliumI18n.getLanguage() : 'en';
     const payload = buildPayload();
     nonceInput.value = payload.submission_nonce;
     setSubmitting(true);
@@ -125,7 +147,7 @@
       try {
         result = await response.json();
       } catch (_error) {
-        throw new Error('The application service returned an unreadable response. Your application has not been confirmed.');
+        throw new Error(t('errors.unreadable', 'The application service returned an unreadable response. Your application has not been confirmed.'));
       }
 
       if (!response.ok || !result || result.ok !== true || !result.reference) {
@@ -147,7 +169,7 @@
       successElement.style.display = 'block';
       window.scrollTo({ top: 0, behavior: 'smooth' });
     } catch (error) {
-      showError(error instanceof Error ? error.message : 'Your application could not be submitted. Please try again.');
+      showError(error instanceof Error ? error.message : t('errors.internal', 'Your application could not be submitted. Please try again.'));
       setSubmitting(false);
     }
   });

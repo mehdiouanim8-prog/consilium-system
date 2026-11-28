@@ -306,7 +306,8 @@ async function handleApplicationSubmission(request, env) {
     ability_to_accept_change: application.abilityToAcceptChange,
     appointment_date: application.appointmentDate,
     appointment_time: application.appointmentStart,
-    applicant_timezone: application.applicantTimezone
+    applicant_timezone: application.applicantTimezone,
+    site_language: application.siteLanguage
   };
 
   try {
@@ -403,6 +404,7 @@ function validateApplication(body) {
   const industryMarket = optionalText(body.industry_market, 200);
   const workingToward = requiredText(body.working_toward, 'Your objectives', 5, 8000);
   const additionalContext = optionalText(body.additional_context, 8000);
+  const siteLanguage = ['en', 'fr', 'ar'].includes(cleanText(body.site_language, 5)) ? cleanText(body.site_language, 5) : 'en';
   const ability = Number(body.ability_to_accept_change);
   if (!Number.isInteger(ability) || ability < 1 || ability > 10) {
     throw new HttpError(400, 'INVALID_CHANGE_RATING', 'Select an ability-to-accept-change rating from 1 to 10.');
@@ -451,6 +453,7 @@ function validateApplication(body) {
     appointmentStart,
     appointmentEnd: minutesToTime(startMinutes + SLOT_MINUTES),
     applicantTimezone,
+    siteLanguage,
     idempotencyKey
   };
 }
@@ -976,63 +979,79 @@ function notificationContent(application, eventType) {
   const name = application.full_name;
   const reference = application.reference;
   const appointment = `${application.appointment_date} at ${application.appointment_start}–${application.appointment_end} (${TIME_ZONE})`;
-  const fields = [
-    ['Application reference', reference],
-    ['Applicant name', name],
-    ['Email', application.email],
-    ['Phone', application.phone],
-    ['Country', application.country],
-    ['City', application.city],
-    ['Reference page', application.reference_url || 'Not provided'],
-    ['Applicant type', application.applicant_type],
-    ['Industry or market', application.industry_market || 'Not provided'],
-    ['Objectives', (application.objectives || []).join(', ') || 'Not selected'],
-    ['Working towards / how Consilium could help', application.working_toward],
-    ['Additional context', application.additional_context || 'Not provided'],
-    ['Ability to accept change', String(application.ability_to_accept_change) + '/10'],
-    ['Requested appointment', appointment],
-    ['Applicant timezone', application.applicant_timezone || 'Unknown'],
-    ['Application status', application.status],
-    ['Submitted at (UTC)', application.created_at]
-  ];
-  const htmlTable = `<table cellpadding="7" cellspacing="0" style="border-collapse:collapse;width:100%;font-family:Arial,sans-serif;font-size:14px">${fields.map(([label, value]) => `<tr><th align="left" valign="top" style="border:1px solid #ddd;background:#f5f5f5">${escapeHtml(label)}</th><td style="border:1px solid #ddd;white-space:pre-wrap">${escapeHtml(value)}</td></tr>`).join('')}</table>`;
-  const textDetails = fields.map(([label, value]) => `${label}: ${value}`).join('\n');
+  const lang = application.answers && ['en', 'fr', 'ar'].includes(application.answers.site_language)
+    ? application.answers.site_language : 'en';
+
+  const applicantCopy = {
+    en: {
+      receivedSubject: 'Your Consilium Application — Received',
+      receivedTitle: 'Application received',
+      receivedBody: `We have successfully received your application. Your information is currently under review, and our team will get back to you shortly.`,
+      requested: 'Your requested appointment',
+      pending: 'Your requested appointment time is not confirmed until you receive a separate confirmation from Consilium.',
+      reference: 'Your application reference is',
+      acceptedSubject: `Your Consilium appointment request has been accepted — ${reference}`,
+      acceptedBody: 'Consilium has accepted your application and appointment request.',
+      scheduled: 'Your appointment is scheduled for',
+      declinedSubject: `Update on your Consilium application — ${reference}`,
+      declinedBody: 'Thank you for your interest in Consilium. After reviewing your application, we are unable to proceed with it at this time. The appointment request has been declined and the requested time has been released.',
+      hello: 'Hello', thanks: 'Thank you for applying to Consilium.', appreciation: 'We appreciate the time you took to apply.'
+    },
+    fr: {
+      receivedSubject: 'Votre candidature Consilium — Reçue',
+      receivedTitle: 'Candidature reçue',
+      receivedBody: 'Nous avons bien reçu votre candidature. Vos informations sont actuellement examinées et notre équipe vous répondra prochainement.',
+      requested: 'Votre rendez-vous demandé',
+      pending: 'L’horaire demandé n’est pas confirmé tant que vous n’avez pas reçu une confirmation distincte de Consilium.',
+      reference: 'Votre référence de candidature est',
+      acceptedSubject: `Votre demande de rendez-vous Consilium a été acceptée — ${reference}`,
+      acceptedBody: 'Consilium a accepté votre candidature et votre demande de rendez-vous.',
+      scheduled: 'Votre rendez-vous est prévu le',
+      declinedSubject: `Mise à jour de votre candidature Consilium — ${reference}`,
+      declinedBody: 'Merci pour votre intérêt pour Consilium. Après examen de votre candidature, nous ne sommes pas en mesure de poursuivre celle-ci pour le moment. La demande de rendez-vous a été refusée et le créneau demandé a été libéré.',
+      hello: 'Bonjour', thanks: 'Merci d’avoir candidaté auprès de Consilium.', appreciation: 'Nous vous remercions du temps consacré à votre candidature.'
+    },
+    ar: {
+      receivedSubject: 'طلب Consilium — تم الاستلام',
+      receivedTitle: 'تم استلام الطلب',
+      receivedBody: 'تم استلام طلبك بنجاح. طلبك قيد المراجعة حالياً وسيتواصل معك فريقنا قريباً.',
+      requested: 'الموعد المطلوب',
+      pending: 'لا يتم تأكيد الوقت المطلوب حتى تتلقى تأكيداً منفصلاً من Consilium.',
+      reference: 'مرجع طلبك هو',
+      acceptedSubject: `تم قبول طلب موعد Consilium — ${reference}`,
+      acceptedBody: 'قبلت Consilium طلبك وطلب الموعد.',
+      scheduled: 'موعدك مقرر في',
+      declinedSubject: `تحديث بشأن طلب Consilium — ${reference}`,
+      declinedBody: 'شكراً لاهتمامك بـ Consilium. بعد مراجعة طلبك، لا يمكننا المضي فيه في الوقت الحالي. تم رفض طلب الموعد وتحرير الوقت المطلوب.',
+      hello: 'مرحباً', thanks: 'شكراً لتقديم طلبك إلى Consilium.', appreciation: 'نقدّر الوقت الذي خصصته لتقديم طلبك.'
+    }
+  }[lang];
 
   if (eventType === 'APPLICATION_ADMIN') {
-    return {
-      to: ADMIN_EMAIL,
-      subject: `New Consilium Application — ${reference}`,
-      html: `<h2>New Consilium application received</h2><p>A new application is awaiting review.</p>${htmlTable}`,
-      text: `A new Consilium application is awaiting review.\n\n${textDetails}`
-    };
+    const fields = [
+      ['Application reference', reference], ['Applicant name', name], ['Email', application.email], ['Phone', application.phone],
+      ['Country', application.country], ['City', application.city], ['Reference page', application.reference_url || 'Not provided'],
+      ['Applicant type', application.applicant_type], ['Industry or market', application.industry_market || 'Not provided'],
+      ['Objectives', (application.objectives || []).join(', ') || 'Not selected'],
+      ['Working towards / how Consilium could help', application.working_toward], ['Additional context', application.additional_context || 'Not provided'],
+      ['Ability to accept change', String(application.ability_to_accept_change) + '/10'], ['Requested appointment', appointment],
+      ['Applicant timezone', application.applicant_timezone || 'Unknown'], ['Application status', application.status], ['Submitted at (UTC)', application.created_at]
+    ];
+    const htmlTable = `<table cellpadding="7" cellspacing="0" style="border-collapse:collapse;width:100%;font-family:Arial,sans-serif;font-size:14px">${fields.map(([label, value]) => `<tr><th align="left" valign="top" style="border:1px solid #ddd;background:#f5f5f5">${escapeHtml(label)}</th><td style="border:1px solid #ddd;white-space:pre-wrap">${escapeHtml(value)}</td></tr>`).join('')}</table>`;
+    const textDetails = fields.map(([label, value]) => `${label}: ${value}`).join('\n');
+    return {to:ADMIN_EMAIL,subject:`New Consilium Application — ${reference}`,html:`<h2>New Consilium application received</h2><p>A new application is awaiting review.</p>${htmlTable}`,text:`A new Consilium application is awaiting review.\n\n${textDetails}`};
   }
   if (eventType === 'APPLICATION_APPLICANT') {
-    return {
-      to: application.email,
-      subject: 'Your Consilium Application — Received',
-      html: `<p>Hello ${escapeHtml(name)},</p><p>Thank you for applying to Consilium.</p><p>We have successfully received your application. Your information is currently under review, and our team will get back to you shortly.</p><p>Your requested appointment: <strong>${escapeHtml(appointment)}</strong>.</p><p>Your requested appointment time is not confirmed until you receive a separate confirmation from Consilium.</p><p>Your application reference is <strong>${escapeHtml(reference)}</strong>.</p><p>We appreciate your interest.</p><p>Consilium<br>Strategy · Intelligence · Execution</p>`,
-      text: `Hello ${name},\n\nThank you for applying to Consilium.\n\nWe have successfully received your application. Your information is currently under review, and our team will get back to you shortly.\n\nYour requested appointment: ${appointment}.\n\nYour requested appointment time is not confirmed until you receive a separate confirmation from Consilium.\n\nApplication reference: ${reference}\n\nWe appreciate your interest.\n\nConsilium\nStrategy · Intelligence · Execution`
-    };
+    return {to:application.email,subject:applicantCopy.receivedSubject,html:`<p>${applicantCopy.hello} ${escapeHtml(name)},</p><p>${applicantCopy.thanks}</p><p>${applicantCopy.receivedBody}</p><p>${applicantCopy.requested}: <strong>${escapeHtml(appointment)}</strong>.</p><p>${applicantCopy.pending}</p><p>${applicantCopy.reference} <strong>${escapeHtml(reference)}</strong>.</p><p>${applicantCopy.appreciation}</p><p>Consilium<br>Strategy · Intelligence · Execution</p>`,text:`${applicantCopy.hello} ${name},\n\n${applicantCopy.thanks}\n\n${applicantCopy.receivedBody}\n\n${applicantCopy.requested}: ${appointment}.\n\n${applicantCopy.pending}\n\n${applicantCopy.reference} ${reference}.\n\n${applicantCopy.appreciation}\n\nConsilium\nStrategy · Intelligence · Execution`};
   }
   if (eventType === 'ACCEPTED_APPLICANT') {
-    return {
-      to: application.email,
-      subject: `Your Consilium appointment request has been accepted — ${reference}`,
-      html: `<p>Hello ${escapeHtml(name)},</p><p>Consilium has accepted your application and appointment request.</p><p>Your appointment is scheduled for <strong>${escapeHtml(appointment)}</strong>.</p><p>Application reference: <strong>${escapeHtml(reference)}</strong>.</p><p>Consilium<br>Strategy · Intelligence · Execution</p>`,
-      text: `Hello ${name},\n\nConsilium has accepted your application and appointment request.\n\nYour appointment is scheduled for ${appointment}.\n\nApplication reference: ${reference}\n\nConsilium\nStrategy · Intelligence · Execution`
-    };
+    return {to:application.email,subject:applicantCopy.acceptedSubject,html:`<p>${applicantCopy.hello} ${escapeHtml(name)},</p><p>${applicantCopy.acceptedBody}</p><p>${applicantCopy.scheduled}: <strong>${escapeHtml(appointment)}</strong>.</p><p>${applicantCopy.reference} <strong>${escapeHtml(reference)}</strong>.</p><p>Consilium<br>Strategy · Intelligence · Execution</p>`,text:`${applicantCopy.hello} ${name},\n\n${applicantCopy.acceptedBody}\n\n${applicantCopy.scheduled}: ${appointment}.\n\n${applicantCopy.reference} ${reference}.\n\nConsilium\nStrategy · Intelligence · Execution`};
   }
   if (eventType === 'DECLINED_APPLICANT') {
-    return {
-      to: application.email,
-      subject: `Update on your Consilium application — ${reference}`,
-      html: `<p>Hello ${escapeHtml(name)},</p><p>Thank you for your interest in Consilium. After reviewing your application, we are unable to proceed with it at this time. The appointment request has been declined and the requested time has been released.</p><p>Application reference: <strong>${escapeHtml(reference)}</strong>.</p><p>We appreciate the time you took to apply.</p><p>Consilium<br>Strategy · Intelligence · Execution</p>`,
-      text: `Hello ${name},\n\nThank you for your interest in Consilium. After reviewing your application, we are unable to proceed with it at this time. The appointment request has been declined and the requested time has been released.\n\nApplication reference: ${reference}\n\nWe appreciate the time you took to apply.\n\nConsilium\nStrategy · Intelligence · Execution`
-    };
+    return {to:application.email,subject:applicantCopy.declinedSubject,html:`<p>${applicantCopy.hello} ${escapeHtml(name)},</p><p>${applicantCopy.declinedBody}</p><p>${applicantCopy.reference} <strong>${escapeHtml(reference)}</strong>.</p><p>${applicantCopy.appreciation}</p><p>Consilium<br>Strategy · Intelligence · Execution</p>`,text:`${applicantCopy.hello} ${name},\n\n${applicantCopy.declinedBody}\n\n${applicantCopy.reference} ${reference}.\n\n${applicantCopy.appreciation}\n\nConsilium\nStrategy · Intelligence · Execution`};
   }
   return null;
 }
-
 function escapeHtml(value) {
   return String(value === null || value === undefined ? '' : value)
     .replace(/&/g, '&amp;')

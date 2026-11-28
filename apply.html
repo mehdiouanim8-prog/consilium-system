@@ -7,6 +7,7 @@
 <meta name="description" content="Apply to Consilium. Share your objectives and how we may be able to help.">
 <title>Apply to Consilium</title>
 <link rel="stylesheet" href="calendar.css">
+<link rel="stylesheet" href="policies.css">
 <style>
 :root{--bg:#000;--fg:#fff;--muted:#aaa;--line:#303030;--max:900px}
 *{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--fg);font-family:"IBM Plex Sans Condensed","Arial Narrow","Liberation Sans Narrow",Arial,sans-serif;-webkit-font-smoothing:antialiased}
@@ -36,62 +37,62 @@ footer{border-top:1px solid var(--line);padding:20px 0;color:#888;font-size:13px
 <body>
 <header class="container">
 <a class="brand" href="/" aria-label="Consilium home"><svg class="star" viewBox="0 0 100 100" role="img" aria-label="Eight-point star"><path d="M50 0 L59 39 L84 16 L66 43 L100 50 L66 57 L84 84 L59 61 L50 100 L41 61 L16 84 L34 57 L0 50 L34 43 L16 16 L41 39 Z" fill="#fff"/></svg><span>Consilium</span></a>
-<a class="back" href="/">← Back to homepage</a>
+<a class="back" href="/" data-i18n="nav.back">← Back to homepage</a>
 </header>
 <main class="container">
 <section class="intro">
-<div class="label">Consilium · Application</div>
-<h1>What are you working towards?</h1>
-<p>Tell us about your objectives, where you are today, and how Consilium could help. Anyone can apply; every application is reviewed.</p>
+<div class="label" data-i18n="apply.label">Consilium · Application</div>
+<h1 data-i18n="apply.title">What are you working towards?</h1>
+<p data-i18n="apply.intro">Tell us about your objectives, where you are today, and how Consilium could help. Anyone can apply; every application is reviewed.</p>
 </section>
 <form id="application-form" action="/api/applications" method="POST">
-<h2 class="section-title">01 / About you</h2>
+<h2 class="section-title"><span data-i18n="apply.section1">01 / About you</span></h2>
 <div class="grid">
-<div class="field"><label for="name">Full name *</label><input id="name" name="name" autocomplete="name" required placeholder="Your full name"></div>
-<div class="field"><label for="email">Email address *</label><input id="email" name="email" type="email" autocomplete="email" required placeholder="you@example.com"></div>
-<div class="field"><label for="phone">Phone number *</label><input id="phone" name="phone" type="tel" autocomplete="tel" required placeholder="Include country code, e.g. +212"></div>
-<div class="field"><label for="country">Country *</label><select id="country" name="country" autocomplete="country-name" required><option value="">Select your country</option></select></div>
-<div class="field"><label for="city">City *</label><input id="city" name="city" autocomplete="address-level2" required placeholder="Your city"></div>
-<div class="field"><label for="website">Website, LinkedIn, or reference page</label><input id="website" name="reference_url" type="url" placeholder="https://"></div>
-<div class="field full"><label for="type">Which best describes you? *</label>
+<div class="field"><label for="name" data-i18n="apply.fullName">Full name *</label><input id="name" name="name" autocomplete="name" required data-i18n-placeholder="apply.fullNamePlaceholder" placeholder="Your full name"></div>
+<div class="field"><label for="email" data-i18n="apply.email">Email address *</label><input id="email" name="email" type="email" autocomplete="email" required data-i18n-placeholder="apply.emailPlaceholder" placeholder="you@example.com"></div>
+<div class="field"><label for="phone" data-i18n="apply.phone">Phone number *</label><input id="phone" name="phone" type="tel" autocomplete="tel" required data-i18n-placeholder="apply.phonePlaceholder" placeholder="Include country code, e.g. +212"></div>
+<div class="field"><label for="country" data-i18n="apply.country">Country *</label><select id="country" name="country" autocomplete="country-name" required><option value="" data-i18n="apply.selectCountry">Select your country</option></select></div>
+<div class="field"><label for="city" data-i18n="apply.city">City *</label><input id="city" name="city" autocomplete="address-level2" required data-i18n-placeholder="apply.cityPlaceholder" placeholder="Your city"></div>
+<div class="field"><label for="website" data-i18n="apply.reference">Website, LinkedIn, or reference page</label><input id="website" name="reference_url" type="url" data-i18n-placeholder="apply.referencePlaceholder" placeholder="https://"></div>
+<div class="field full"><label for="type" data-i18n="apply.type">Which best describes you? *</label>
 <select id="type" name="applicant_type" required>
-<option value="">Select applicant type</option>
-<option>Just starting / aspiring entrepreneur</option><option>Entrepreneur / founder</option><option>Small business</option><option>Microbusiness / small firm</option><option>Established company</option><option>Parent company / holding company</option><option>Investor</option><option>Startup / venture team</option><option>Professional / independent expert</option><option>Other</option>
+<option value="" data-i18n="apply.selectApplicant">Select applicant type</option>
+<option data-i18n="type.aspiring">Just starting / aspiring entrepreneur</option><option data-i18n="type.founder">Entrepreneur / founder</option><option data-i18n="type.small">Small business</option><option data-i18n="type.micro">Microbusiness / small firm</option><option data-i18n="type.established">Established company</option><option data-i18n="type.holding">Parent company / holding company</option><option data-i18n="type.investor">Investor</option><option data-i18n="type.startup">Startup / venture team</option><option data-i18n="type.professional">Professional / independent expert</option><option data-i18n="type.other">Other</option>
 </select></div>
-<div class="field full"><label for="market">Industry or market</label><input id="market" name="industry_market" placeholder="e.g. technology, finance, retail, healthcare, infrastructure"></div>
+<div class="field full"><label for="market" data-i18n="apply.industry">Industry or market</label><input id="market" name="industry_market" data-i18n-placeholder="apply.industryPlaceholder" placeholder="e.g. technology, finance, retail, healthcare, infrastructure"></div>
 </div>
-<h2 class="section-title">02 / Your objectives</h2>
-<p class="hint">Select as many as apply.</p>
+<h2 class="section-title"><span data-i18n="apply.section2">02 / Your objectives</span></h2>
+<p class="hint" data-i18n="apply.selectMany">Select as many as apply.</p>
 <div class="check-grid" style="margin-top:16px">
-<label class="check"><input type="checkbox" name="objectives[]" value="Business growth">Business growth</label>
-<label class="check"><input type="checkbox" name="objectives[]" value="Sales and revenue">Sales and revenue</label>
-<label class="check"><input type="checkbox" name="objectives[]" value="Guidance and strategic advisory">Guidance and strategic advisory</label>
-<label class="check"><input type="checkbox" name="objectives[]" value="Startup development">Startup development</label>
-<label class="check"><input type="checkbox" name="objectives[]" value="Acquisition or exit">Acquisition or exit</label>
-<label class="check"><input type="checkbox" name="objectives[]" value="High-ROI opportunities">High-ROI opportunities</label>
-<label class="check"><input type="checkbox" name="objectives[]" value="New opportunities">Discovering new opportunities</label>
-<label class="check"><input type="checkbox" name="objectives[]" value="Connections and network">Connections and network</label>
-<label class="check"><input type="checkbox" name="objectives[]" value="Market research and intelligence">Market research and intelligence</label>
-<label class="check"><input type="checkbox" name="objectives[]" value="Planning and execution">Planning and execution</label>
-<label class="check"><input type="checkbox" name="objectives[]" value="Investment evaluation">Investment evaluation</label>
-<label class="check"><input type="checkbox" name="objectives[]" value="International expansion">International expansion</label>
-<label class="check"><input type="checkbox" name="objectives[]" value="Partnerships">Partnerships</label>
-<label class="check"><input type="checkbox" name="objectives[]" value="Other objective">Other</label>
+<label class="check"><input type="checkbox" name="objectives[]" value="Business growth"><span data-i18n="obj.growth">Business growth</span></label>
+<label class="check"><input type="checkbox" name="objectives[]" value="Sales and revenue"><span data-i18n="obj.sales">Sales and revenue</span></label>
+<label class="check"><input type="checkbox" name="objectives[]" value="Guidance and strategic advisory"><span data-i18n="obj.advisory">Guidance and strategic advisory</span></label>
+<label class="check"><input type="checkbox" name="objectives[]" value="Startup development"><span data-i18n="obj.startup">Startup development</span></label>
+<label class="check"><input type="checkbox" name="objectives[]" value="Acquisition or exit"><span data-i18n="obj.exit">Acquisition or exit</span></label>
+<label class="check"><input type="checkbox" name="objectives[]" value="High-ROI opportunities"><span data-i18n="obj.roi">High-ROI opportunities</span></label>
+<label class="check"><input type="checkbox" name="objectives[]" value="New opportunities" data-i18n="obj.opportunities">Discovering new opportunities</label>
+<label class="check"><input type="checkbox" name="objectives[]" value="Connections and network"><span data-i18n="obj.network">Connections and network</span></label>
+<label class="check"><input type="checkbox" name="objectives[]" value="Market research and intelligence"><span data-i18n="obj.intelligence">Market research and intelligence</span></label>
+<label class="check"><input type="checkbox" name="objectives[]" value="Planning and execution"><span data-i18n="obj.execution">Planning and execution</span></label>
+<label class="check"><input type="checkbox" name="objectives[]" value="Investment evaluation"><span data-i18n="obj.investment">Investment evaluation</span></label>
+<label class="check"><input type="checkbox" name="objectives[]" value="International expansion"><span data-i18n="obj.international">International expansion</span></label>
+<label class="check"><input type="checkbox" name="objectives[]" value="Partnerships"><span data-i18n="obj.partnerships">Partnerships</span></label>
+<label class="check"><input type="checkbox" name="objectives[]" value="Other objective"><span data-i18n="obj.otherLabel">Other</span></label>
 </div>
 <div class="grid" style="margin-top:24px">
-<div class="field full"><label for="working-toward">What are you working towards, and how could Consilium help? *</label><textarea id="working-toward" name="working_toward" required placeholder="Describe your goals, current situation, challenges, or opportunity. Write in your own words."></textarea></div>
-<div class="field full"><label for="additional">Anything else we should know? (optional)</label><textarea id="additional" name="additional_context" placeholder="Share any useful context, links, or timing."></textarea></div>
+<div class="field full"><label for="working-toward" data-i18n="apply.working">What are you working towards, and how could Consilium help? *</label><textarea id="working-toward" name="working_toward" required data-i18n-placeholder="apply.workingPlaceholder" placeholder="Describe your goals, current situation, challenges, or opportunity. Write in your own words."></textarea></div>
+<div class="field full"><label for="additional" data-i18n="apply.additional">Anything else we should know? (optional)</label><textarea id="additional" name="additional_context" data-i18n-placeholder="apply.additionalPlaceholder" placeholder="Share any useful context, links, or timing."></textarea></div>
 </div>
 
-<h2 class="section-title">03 / Appointment availability</h2>
-<p class="hint" style="font-size:14px;line-height:1.5;margin:0 0 12px">Select an available appointment time.</p>
+<h2 class="section-title"><span data-i18n="apply.section3">03 / Appointment availability</span></h2>
+<p class="hint" style="font-size:14px;line-height:1.5;margin:0 0 12px" data-i18n="calendar.selectTime">Select an available appointment time.</p>
 <div class="booking-calendar" id="booking-calendar" aria-label="Choose an appointment date and time">
-  <div class="cal-top"><div class="cal-month" id="cal-month">Loading calendar…</div><div class="cal-nav"><button type="button" id="cal-prev" aria-label="Previous month">‹</button><button type="button" id="cal-next" aria-label="Next month">›</button></div></div>
-  <div class="cal-weekdays" aria-hidden="true"><span>MON</span><span>TUE</span><span>WED</span><span>THU</span><span>FRI</span><span>SAT</span><span>SUN</span></div>
+  <div class="cal-top"><div class="cal-month" id="cal-month" data-i18n="calendar.loadingCalendar">Loading calendar…</div><div class="cal-nav"><button type="button" id="cal-prev" aria-label="Previous month" data-i18n-aria="calendar.prev">‹</button><button type="button" id="cal-next" aria-label="Next month" data-i18n-aria="calendar.next">›</button></div></div>
+  <div class="cal-weekdays" aria-hidden="true"><span data-weekday="1">MON</span><span data-weekday="2">TUE</span><span data-weekday="3">WED</span><span data-weekday="4">THU</span><span data-weekday="5">FRI</span><span data-weekday="6">SAT</span><span data-weekday="0">SUN</span></div>
   <div class="cal-days" id="cal-days"></div>
-  <p class="cal-prompt" id="cal-prompt">Select a date to view available times.</p>
+  <p class="cal-prompt" id="cal-prompt" data-i18n="calendar.prompt">Select a date to view available times.</p>
   <div class="cal-slots" id="cal-slots"></div>
-  <p class="cal-status" id="cal-status" role="status" aria-live="polite">All times are shown in Casablanca time (Africa/Casablanca).</p>
+  <p class="cal-status" id="cal-status" role="status" aria-live="polite" data-i18n="calendar.timezone">All times are shown in Casablanca time (Africa/Casablanca).</p>
   <p class="cal-selected" id="cal-selected" hidden></p>
 </div>
 <input type="hidden" name="appointment_date" id="appointment-date" required>
@@ -99,25 +100,26 @@ footer{border-top:1px solid var(--line);padding:20px 0;color:#888;font-size:13px
 <input type="text" name="website" id="website-honeypot" tabindex="-1" autocomplete="off" aria-hidden="true" style="position:absolute;left:-10000px;width:1px;height:1px">
 <input type="hidden" name="submission_nonce" id="submission-nonce">
 <input type="hidden" name="applicant_timezone" id="applicant-timezone">
-<h2 class="section-title">04 / Your approach to change</h2>
-<div class="field full"><label for="change-ability">What is your ability to accept change? *</label>
+<h2 class="section-title"><span data-i18n="apply.section4">04 / Your approach to change</span></h2>
+<div class="field full"><label for="change-ability" data-i18n="apply.change">What is your ability to accept change? *</label>
 <select id="change-ability" name="ability_to_accept_change" required>
-<option value="">Choose a rating from 1 to 10</option>
-<option value="1">1 — Very resistant to change</option><option value="2">2</option><option value="3">3</option><option value="4">4</option><option value="5">5 — Neutral / adaptable with support</option><option value="6">6</option><option value="7">7</option><option value="8">8</option><option value="9">9</option><option value="10">10 — Highly open to change</option>
+<option value="" data-i18n="apply.changeSelect">Choose a rating from 1 to 10</option>
+<option value="1" data-i18n="apply.change1">1 — Very resistant to change</option><option value="2">2</option><option value="3">3</option><option value="4">4</option><option value="5" data-i18n="apply.change5">5 — Neutral / adaptable with support</option><option value="6">6</option><option value="7">7</option><option value="8">8</option><option value="9">9</option><option value="10" data-i18n="apply.change10">10 — Highly open to change</option>
 </select></div>
 <p class="privacy" id="form-error" role="alert" aria-live="assertive" hidden></p>
-<button class="submit" type="submit">Submit application ↗</button>
-<p class="privacy">Your application and appointment request will be sent to Consilium for review. Your selected time is not confirmed until Consilium accepts the request.</p>
+<button class="submit" type="submit" data-i18n="apply.submit">Submit application ↗</button>
+<p class="privacy" data-i18n="apply.privacy">Your application and appointment request will be sent to Consilium for review. Your selected time is not confirmed until Consilium accepts the request.</p>
 </form>
 <section class="success" id="success" role="status" aria-live="polite">
-<h2>APPLICATION RECEIVED.</h2>
-<p>Thank you for applying to Consilium.</p>
-<p>Your application has been successfully submitted and is currently under review. Our team will review your information and get back to you shortly.</p>
-<p>Your appointment request is not confirmed yet. We will contact you regarding the requested time.</p>
+<h2 data-i18n="success.title">APPLICATION RECEIVED.</h2>
+<p data-i18n="success.thanks">Thank you for applying to Consilium.</p>
+<p data-i18n="success.review">Your application has been successfully submitted and is currently under review. Our team will review your information and get back to you shortly.</p>
+<p data-i18n="success.appointment">Your appointment request is not confirmed yet. We will contact you regarding the requested time.</p>
 <p id="success-reference" style="margin-top:18px;color:#fff;font-weight:500"></p>
 </section>
 </main>
-<footer><div class="container">Consilium · Market intelligence. Precise planning. Execution. Results.</div></footer>
+<footer><div class="container"><span data-i18n="footer.tag">Consilium · Market intelligence. Precise planning. Execution. Results.</span><span> · <a href="privacy-policy.html" data-i18n="nav.privacy">Privacy Policy</a> · <a href="terms-of-use.html" data-i18n="nav.terms">Terms of Use</a> · <a href="cookie-policy.html" data-i18n="nav.cookies">Cookie Policy</a> · <a href="advisory-disclaimer.html" data-i18n="nav.disclaimer">Advisory Disclaimer</a></span></div></footer>
+<script src="i18n.js" defer></script>
 <script src="calendar.js" defer></script>
 <script src="apply.js" defer></script>
 </body>

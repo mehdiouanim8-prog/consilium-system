@@ -40,12 +40,15 @@
     return `${p.year}-${p.month}-${p.day}`;
   };
   const monthKey = (date) => `${date.getFullYear()}-${pad(date.getMonth() + 1)}`;
-  const monthTitle = (date) => new Intl.DateTimeFormat('en', {
+  const lang = () => (window.ConsiliumI18n && window.ConsiliumI18n.getLanguage()) || 'en';
+  const locale = () => ({ en:'en', fr:'fr-FR', ar:'ar' }[lang()] || 'en');
+  const t = (key, fallback) => window.ConsiliumI18n ? window.ConsiliumI18n.t(key, fallback) : fallback;
+  const monthTitle = (date) => new Intl.DateTimeFormat(locale(), {
     month: 'long', year: 'numeric', timeZone: TIME_ZONE
   }).format(new Date(date.getFullYear(), date.getMonth(), 15, 12));
   const localDateLabel = (key) => {
     const [year, month, day] = key.split('-').map(Number);
-    return new Intl.DateTimeFormat('en', {
+    return new Intl.DateTimeFormat(locale(), {
       weekday: 'long', day: 'numeric', month: 'long', year: 'numeric',
       timeZone: TIME_ZONE
     }).format(new Date(year, month - 1, day, 12));
@@ -84,17 +87,17 @@
         credentials: 'same-origin'
       });
     } catch (_error) {
-      throw new Error('We could not reach the appointment service. Please try again.');
+      throw new Error(t('calendar.unreachable','We could not reach the appointment service. Please try again.'));
     }
 
     let data;
     try {
       data = await response.json();
     } catch (_error) {
-      throw new Error('The appointment service returned an unreadable response. Please try again.');
+      throw new Error(t('calendar.unreadable','The appointment service returned an unreadable response. Please try again.'));
     }
     if (!response.ok || !data || data.ok !== true) {
-      throw new Error((data && data.message) || 'Could not retrieve appointment availability.');
+      throw new Error(t(`errors.${data && data.code ? data.code : 'availability'}`, (data && data.message) || t('calendar.availability','Could not retrieve appointment availability.')));
     }
     return data;
   }
@@ -110,10 +113,10 @@
     if (key < todayKey() || availableCount === 0) {
       button.disabled = true;
       if (availableCount === 0 && key >= todayKey()) {
-        button.setAttribute('aria-label', `${dayNumber}, no times available`);
+        button.setAttribute('aria-label', `${dayNumber}, ${t('calendar.noTimes','no times available')}`);
       }
     } else if (typeof availableCount === 'number') {
-      button.setAttribute('aria-label', `${dayNumber}, ${availableCount} available times`);
+      button.setAttribute('aria-label', `${dayNumber}, ${availableCount} ${t('calendar.availableTimes','available times')}`);
     }
     button.addEventListener('click', () => chooseDate(key, button));
     return button;
@@ -156,18 +159,18 @@
     const requestNumber = ++monthRequestNumber;
     const key = monthKey(shownMonth);
     elements.calendar.setAttribute('aria-busy', 'true');
-    setStatus('Loading available dates…', false);
+    setStatus(t('calendar.loadingDates','Loading available dates…'), false);
     try {
       const data = await getJson(`/availability?month=${encodeURIComponent(key)}&v=${Date.now()}`);
       if (requestNumber !== monthRequestNumber || key !== monthKey(shownMonth)) return;
       monthAvailability = data.availableDates || {};
       renderMonth();
-      setStatus('Choose an available date to view appointment times. Times are in Casablanca time.', false);
+      setStatus(t('calendar.chooseDate','Choose an available date to view appointment times. Times are in Casablanca time.'), false);
     } catch (error) {
       if (requestNumber !== monthRequestNumber) return;
       monthAvailability = null;
       renderMonth();
-      setStatus(`${error.message} You can select a date to retry.`, true);
+      setStatus(`${error.message} ${t('calendar.retry','You can select a date to retry.')}`, true);
     }
   }
 
@@ -178,7 +181,7 @@
       button.type = 'button';
       button.className = 'cal-slot';
       button.textContent = time;
-      button.setAttribute('aria-label', `${time}, 45-minute appointment`);
+      button.setAttribute('aria-label', `${time}, ${t('calendar.duration','45-minute appointment')}`);
       if (time === selectedTime && dateKey === selectedDate) button.classList.add('selected');
       button.addEventListener('click', () => selectTime(dateKey, time, button));
       elements.slots.appendChild(button);
@@ -192,9 +195,9 @@
     selectedTime = time;
     elements.dateInput.value = dateKey;
     elements.timeInput.value = time;
-    elements.selected.textContent = `Selected: ${localDateLabel(dateKey)} · ${time} (Casablanca time, ${APPOINTMENT_MINUTES} minutes)`;
+    elements.selected.textContent = `${t('calendar.selected','Selected')}: ${localDateLabel(dateKey)} · ${time} (${t('calendar.casablanca','Casablanca time')}, ${APPOINTMENT_MINUTES} ${t('calendar.minutes','minutes')})`;
     elements.selected.hidden = false;
-    setStatus('This is an appointment request. The time is reserved as pending and is not confirmed until Consilium accepts it.', false);
+    setStatus(t('calendar.pending','This is an appointment request. The time is reserved as pending and is not confirmed until Consilium accepts it.'), false);
   }
 
   async function chooseDate(key, button) {
@@ -206,8 +209,8 @@
     elements.timeInput.value = '';
     elements.selected.hidden = true;
     elements.slots.replaceChildren();
-    elements.prompt.textContent = `Available appointment times for ${localDateLabel(key)}`;
-    setStatus('Checking availability…', false);
+    elements.prompt.textContent = `${t('calendar.availableFor','Available appointment times for')} ${localDateLabel(key)}`;
+    setStatus(t('calendar.checking','Checking availability…'), false);
 
     const requestNumber = ++dateRequestNumber;
     try {
@@ -216,11 +219,11 @@
       const slots = Array.isArray(data.slots) ? data.slots : [];
       renderSlots(slots, key);
       if (data.dailyLimitReached) {
-        setStatus('This date has reached the daily limit of appointment requests. Please choose another date.', false);
+        setStatus(t('errors.DAILY_LIMIT_REACHED','This date has reached the daily limit of appointment requests. Please choose another date.'), false);
       } else if (slots.length === 0) {
-        setStatus('No appointment times are available on this date. Please choose another date.', false);
+        setStatus(t('calendar.none','No appointment times are available on this date. Please choose another date.'), false);
       } else {
-        setStatus('Times are displayed in Casablanca time. Select one to attach it to your application.', false);
+        setStatus(t('calendar.attach','Times are displayed in Casablanca time. Select one to attach it to your application.'), false);
       }
     } catch (error) {
       if (requestNumber !== dateRequestNumber) return;

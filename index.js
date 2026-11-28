@@ -9,7 +9,7 @@ const PUBLIC_DIR = path.dirname(fileURLToPath(import.meta.url));
 // Flat layout: only these files are ever served to browsers.
 const PUBLIC_FILES = new Set([
   'index.html', 'apply.html', 'apply.js', 'calendar.js', 'calendar.css',
-  'ADMINDASHBOARDCONSILIUM.html', 'admin.js', 'admin.css'
+  'ADMINDASHBOARDCONSILIUM.html', 'admin.js', 'admin.css', 'i18n.js', 'site.js', 'legal-content.js', 'policies.css', 'privacy-policy.html', 'terms-of-use.html', 'cookie-policy.html', 'advisory-disclaimer.html'
 ]);
 const MAX_BODY_BYTES = 64 * 1024;
 
